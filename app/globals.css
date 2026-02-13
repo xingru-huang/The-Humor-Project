@@ -1,9 +1,14 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --font-geist-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --background: #f3eee4;
+  --foreground: #1f2933;
+  --surface: #fffdf8;
+  --muted: #5d6672;
+  --accent-a: #0f766e;
+  --accent-b: #e85d04;
+  --font-dm-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-playfair-display: "Times New Roman", serif;
   --font-geist-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
     "Courier New", monospace;
 }
@@ -11,19 +16,76 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-dm-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 12% 15%, color-mix(in oklab, var(--accent-a) 14%, white), transparent 42%),
+    radial-gradient(circle at 88% 10%, color-mix(in oklab, var(--accent-b) 12%, white), transparent 38%),
+    linear-gradient(160deg, #f7f2e9 0%, var(--background) 48%, #ece4d7 100%);
+  color: var(--foreground);
+  font-family: var(--font-dm-sans), sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-playfair-display), serif;
+}
+
+@keyframes drift {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, -10px, 0) scale(1.03);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes rise-in {
+  0% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.drift-slow {
+  animation: drift 8s ease-in-out infinite;
+}
+
+.rise-in {
+  animation: rise-in 500ms ease-out both;
+}
+
+@keyframes soft-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes floaty {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.soft-pop {
+  animation: soft-pop 420ms ease-out both;
+}
+
+.floaty {
+  animation: floaty 3.8s ease-in-out infinite;
 }

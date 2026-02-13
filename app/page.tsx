@@ -1,160 +1,72 @@
 import Link from "next/link";
 import { unstable_noStore as noStore } from "next/cache";
-import { supabase } from "@/lib/supabase";
-
-const PAGE_SIZE = 12;
+import GoogleSignInButton from "@/app/google-sign-in-button";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { getSupabaseConfig } from "@/lib/supabase-config";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
 
-export default async function Home({
-                                     searchParams,
-                                   }: {
-  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
-}) {
+export default async function Home() {
   noStore();
 
-  if (!supabase) {
+  let supabase;
+  let config;
+
+  try {
+    supabase = await createSupabaseServerClient();
+    config = getSupabaseConfig();
+  } catch {
     return (
-        <div className="flex min-h-screen items-center justify-center bg-white text-black">
-          <h1 className="text-2xl font-semibold">Supabase client not initialized</h1>
-        </div>
+      <div className="flex min-h-screen items-center justify-center bg-white text-black">
+        <h1 className="text-2xl font-semibold">Supabase client not initialized</h1>
+      </div>
     );
   }
 
-  const sp = (await searchParams) ?? {};
-  const pageParam = sp.page;
-  const page = Math.max(
-      1,
-      Number(Array.isArray(pageParam) ? pageParam[0] : pageParam) || 1
-  );
-
-  const from = (page - 1) * PAGE_SIZE;
-  const to = from + PAGE_SIZE - 1;
-
-  const [{ data, error }, { count }] = await Promise.all([
-    supabase
-        .from("captions")
-        .select(
-            "id, content, like_count, created_datetime_utc, image_id, image:images!captions_image_id_fkey(url), profile:profiles!captions_profile_id_fkey(first_name,last_name)"
-        )
-        .order("like_count", { ascending: false, nullsFirst: false })
-        .order("id", { ascending: false })
-        .range(from, to),
-
-    supabase.from("captions").select("*", { count: "exact", head: true }),
-  ]);
-
-  if (error) {
-    return (
-        <div className="flex min-h-screen items-center justify-center bg-white text-black">
-          <h1 className="text-2xl font-semibold">Failed to load images.</h1>
-        </div>
-    );
-  }
-
-  const rows = (data ?? []).map((row) => {
-    const image = Array.isArray(row.image) ? row.image[0] : row.image ?? null;
-    const profile = Array.isArray(row.profile) ? row.profile[0] : row.profile ?? null;
-    return { ...row, image, profile };
-  });
-
-  const total = count ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const prevPage = Math.max(1, page - 1);
-  const nextPage = Math.min(totalPages, page + 1);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   return (
-      <div className="min-h-screen bg-[#f7f7f5] text-black">
-        <main key={page} className="mx-auto w-full max-w-6xl px-6 py-16 sm:py-20">
-          <div className="mx-auto max-w-2xl text-center">
-            <p className="text-xs uppercase tracking-[0.3em] text-black/45">
-              Curated humor
-            </p>
-            <h1 className="mt-4 text-4xl font-semibold tracking-tight sm:text-5xl">
-              The Humor Project
+    <div className="relative min-h-screen overflow-hidden bg-[#f7f7f5] text-black">
+      <div className="pointer-events-none absolute inset-0 opacity-35 [background-image:radial-gradient(circle_at_1px_1px,rgba(0,0,0,0.1)_1px,transparent_0)] [background-size:24px_24px]" />
+      <div className="pointer-events-none absolute -left-20 top-24 h-56 w-56 rounded-full bg-black/[0.05] blur-3xl" />
+      <div className="pointer-events-none absolute -right-28 bottom-20 h-72 w-72 rounded-full bg-black/[0.06] blur-3xl" />
+
+      <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center px-6 py-16 sm:py-20">
+        <section className="soft-pop relative w-full max-w-2xl">
+          <div className="absolute inset-0 -rotate-1 rounded-[2rem] border border-black/10 bg-[#f3f1ec]" />
+          <div className="relative rounded-[2rem] border border-black/10 bg-white/92 px-8 py-10 text-center shadow-[0_40px_70px_-54px_rgba(0,0,0,0.8)] backdrop-blur sm:px-12 sm:py-12">
+
+            <p className="text-xs uppercase tracking-[0.28em] text-black/45">Private access</p>
+            <h1 className="font-display mt-5 text-5xl leading-[1.02] tracking-tight sm:text-6xl">
+              The Humor
+              <br />
+              Project
             </h1>
+            <div className="mx-auto mt-5 h-px w-20 bg-black/20" />
+            <p className="mt-4 text-sm text-black/55">Serious auth. Silly content.</p>
+
+            <div className="mt-8 flex items-center justify-center">
+              {user ? (
+                <Link
+                  href="/protected"
+                  className="inline-flex items-center justify-center rounded-full bg-black px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-black/80"
+                >
+                  Enter Protected Feed
+                </Link>
+              ) : (
+                <GoogleSignInButton
+                  supabaseUrl={config.supabaseUrl}
+                  supabaseAnonKey={config.supabaseAnonKey}
+                />
+              )}
+            </div>
           </div>
-
-          <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {rows.map((row) => {
-              const src = row.image?.url ?? null;
-              const caption = row.content ?? "";
-              const likeCount = row.like_count ?? 0;
-              const alt = caption;
-
-              const name = row.profile
-                  ? `${row.profile.first_name ?? ""} ${row.profile.last_name ?? ""}`.trim()
-                  : "";
-              const author = name || "Unknown";
-
-              const created = row.created_datetime_utc
-                  ? new Date(row.created_datetime_utc).toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "short",
-                    day: "2-digit",
-                  })
-                  : null;
-
-              return (
-                  <article
-                      key={row.id}
-                      className="flex flex-col overflow-hidden rounded-2xl border border-black/10 bg-white shadow-sm transition-shadow hover:shadow-md"
-                  >
-                    {src ? (
-                        <img
-                            src={src}
-                            alt={alt}
-                            className="aspect-4/3 w-full object-cover"
-                            loading="lazy"
-                        />
-                    ) : (
-                        <div className="flex aspect-4/3 items-center justify-center bg-black/5 text-sm text-black/50">
-                          No image
-                        </div>
-                    )}
-                    <div className="flex flex-1 flex-col gap-3 p-5">
-                      <h2 className="text-lg font-semibold leading-7">{caption}</h2>
-                      <div className="mt-auto flex items-center justify-between text-xs text-black/55">
-                        <span>{author}</span>
-                        <span>{created ?? "Date unknown"}</span>
-                      </div>
-                      <div className="text-xs text-black/55">Likes {likeCount}</div>
-                    </div>
-                  </article>
-              );
-            })}
-          </div>
-
-          <div className="mt-10 flex items-center justify-center gap-4 text-sm text-black/70">
-            <Link
-                prefetch={false}
-                scroll={false}
-                href={`/?page=${prevPage}`}
-                className={`rounded-full border border-black/10 px-4 py-2 transition-colors hover:border-black/30 ${
-                    page <= 1 ? "pointer-events-none opacity-40" : ""
-                }`}
-            >
-              Previous
-            </Link>
-
-            <span className="text-xs uppercase tracking-[0.2em] text-black/45">
-            Page {page} of {totalPages}
-          </span>
-
-            <Link
-                prefetch={false}
-                scroll={false}
-                href={`/?page=${nextPage}`}
-                className={`rounded-full border border-black/10 px-4 py-2 transition-colors hover:border-black/30 ${
-                    page >= totalPages ? "pointer-events-none opacity-40" : ""
-                }`}
-            >
-              Next
-            </Link>
-          </div>
-        </main>
-      </div>
+        </section>
+      </main>
+    </div>
   );
 }
