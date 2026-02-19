@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
-  const response = NextResponse.redirect(new URL("/protected", request.url));
+  const response = NextResponse.redirect(new URL("/", request.url));
 
   try {
     const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig();

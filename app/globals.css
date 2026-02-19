@@ -1,12 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f3eee4;
-  --foreground: #1f2933;
-  --surface: #fffdf8;
-  --muted: #5d6672;
-  --accent-a: #0f766e;
-  --accent-b: #e85d04;
+  --background: #faf9f7;
+  --foreground: #18181b;
+  --surface: #ffffff;
+  --muted: #71717a;
+  --accent: #18181b;
+  --border: #e4e4e7;
+  --border-hover: #a1a1aa;
   --font-dm-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-playfair-display: "Times New Roman", serif;
   --font-geist-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
@@ -23,9 +24,9 @@
 body {
   min-height: 100vh;
   background:
-    radial-gradient(circle at 12% 15%, color-mix(in oklab, var(--accent-a) 14%, white), transparent 42%),
-    radial-gradient(circle at 88% 10%, color-mix(in oklab, var(--accent-b) 12%, white), transparent 38%),
-    linear-gradient(160deg, #f7f2e9 0%, var(--background) 48%, #ece4d7 100%);
+    radial-gradient(circle at 12% 15%, rgba(15, 118, 110, 0.07), transparent 42%),
+    radial-gradient(circle at 88% 10%, rgba(232, 93, 4, 0.06), transparent 38%),
+    linear-gradient(160deg, #f7f2e9 0%, #f3eee4 48%, #ece4d7 100%);
   color: var(--foreground);
   font-family: var(--font-dm-sans), sans-serif;
 }
@@ -34,58 +35,193 @@ body {
   font-family: var(--font-playfair-display), serif;
 }
 
-@keyframes drift {
-  0%, 100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(0, -10px, 0) scale(1.03);
-  }
+.font-mono {
+  font-family: var(--font-geist-mono), monospace;
 }
 
-@keyframes rise-in {
-  0% {
+::selection {
+  background: #18181b;
+  color: #faf9f7;
+}
+
+@keyframes fade-up {
+  from {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(20px);
   }
-  100% {
+  to {
     opacity: 1;
     transform: translateY(0);
   }
 }
 
-.drift-slow {
-  animation: drift 8s ease-in-out infinite;
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.rise-in {
-  animation: rise-in 500ms ease-out both;
-}
-
-@keyframes soft-pop {
-  0% {
-    opacity: 0;
-    transform: translateY(8px) scale(0.985);
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(-12deg);
   }
-  100% {
+  50% {
+    transform: translateY(-8px) rotate(-12deg);
+  }
+}
+
+@keyframes float-reverse {
+  0%, 100% {
+    transform: translateY(0) rotate(6deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(6deg);
+  }
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
 }
 
-@keyframes floaty {
-  0%, 100% {
-    transform: translateY(0);
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
   }
-  50% {
-    transform: translateY(-4px);
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 
-.soft-pop {
-  animation: soft-pop 420ms ease-out both;
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.floaty {
-  animation: floaty 3.8s ease-in-out infinite;
+@keyframes toast-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.9);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.02);
+  }
+  20% {
+    transform: translateY(0) scale(1);
+  }
+  80% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.95);
+  }
+}
+
+@keyframes card-swap {
+  0% {
+    opacity: 0;
+    transform: translateX(30px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes swipe-left {
+  0% {
+    opacity: 1;
+    transform: translateX(0) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-120px) rotate(-8deg);
+  }
+}
+
+@keyframes swipe-right {
+  0% {
+    opacity: 1;
+    transform: translateX(0) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(120px) rotate(8deg);
+  }
+}
+
+@keyframes vote-bounce {
+  0% { transform: scale(1); }
+  40% { transform: scale(0.88); }
+  70% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+@keyframes confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(60px) rotate(360deg);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-fade-in {
+  animation: fade-in 500ms ease both;
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+.animate-float-reverse {
+  animation: float-reverse 5s ease-in-out infinite;
+}
+
+.animate-card-in {
+  animation: card-in 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-modal-in {
+  animation: modal-in 200ms ease-out both;
+}
+
+.animate-backdrop-in {
+  animation: backdrop-in 200ms ease both;
+}
+
+.animate-toast {
+  animation: toast-pop 2.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-card-swap {
+  animation: card-swap 350ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-swipe-left {
+  animation: swipe-left 300ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.animate-swipe-right {
+  animation: swipe-right 300ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.animate-vote-bounce {
+  animation: vote-bounce 350ms cubic-bezier(0.16, 1, 0.3, 1);
 }
