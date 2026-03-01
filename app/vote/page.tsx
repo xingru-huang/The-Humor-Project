@@ -56,8 +56,6 @@ export default async function VotePage() {
     })
     .filter((c): c is typeof c & { imageUrl: string } => c.imageUrl !== null);
 
-  const shuffled = captions.sort(() => Math.random() - 0.5);
-
   const [{ data: userVotes }, { data: allVotes }] = await Promise.all([
     supabase
       .from("caption_votes")
@@ -92,7 +90,7 @@ export default async function VotePage() {
 
       <main className="mx-auto w-full max-w-6xl px-6 pb-20 pt-10">
         <VoteCarousel
-          captions={shuffled}
+          captions={captions}
           initialVotes={initialVotes}
           initialVoteOrder={voteOrder}
           voteStats={voteStats}

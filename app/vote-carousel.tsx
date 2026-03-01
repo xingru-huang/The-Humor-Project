@@ -41,6 +41,15 @@ function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+function shuffleCaptions(captions: CaptionItem[]) {
+  const arr = [...captions];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 type VoteCarouselProps = {
   captions: CaptionItem[];
   initialVotes: Record<string, number>;
@@ -54,11 +63,19 @@ export default function VoteCarousel({
   initialVoteOrder,
   voteStats,
 }: VoteCarouselProps) {
-  const [items] = useState(captions);
-  const [index, setIndex] = useState(0);
   const [votes, setVotes] = useState<Record<string, number | null>>(
     Object.fromEntries(Object.entries(initialVotes).map(([k, v]) => [k, v]))
   );
+  const votedIds = new Set(Object.keys(initialVotes));
+  const [items, setItems] = useState<CaptionItem[]>([]);
+  const [index, setIndex] = useState(0);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setItems(shuffleCaptions(captions.filter((c) => !votedIds.has(c.id))));
+    setMounted(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [voteOrder, setVoteOrder] = useState<string[]>(initialVoteOrder);
   const [isPending, startTransition] = useTransition();
   const [reaction, setReaction] = useState<Reaction | null>(null);
@@ -66,7 +83,10 @@ export default function VoteCarousel({
   const [cardKey, setCardKey] = useState(0);
   const [swipeDir, setSwipeDir] = useState<"left" | "right" | null>(null);
   const [bounceKey, setBounceKey] = useState(0);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [voteError, setVoteError] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
+  const HISTORY_PAGE_SIZE = 5;
 
   const advance = useCallback(() => {
     if (index < items.length - 1) {
@@ -76,6 +96,79 @@ export default function VoteCarousel({
     }
   }, [index, items.length]);
 
+  const captionMap = new Map(captions.map((c) => [c.id, c]));
+  const votedEntries = voteOrder
+    .filter((id) => votes[id] != null && captionMap.has(id))
+    .map((id) => ({ ...captionMap.get(id)!, vote: votes[id]! }));
+  const upCount = votedEntries.filter((c) => c.vote === 1).length;
+  const downCount = votedEntries.filter((c) => c.vote === -1).length;
+  const totalVoted = votedEntries.length;
+  const votedInDeck = items.filter((c) => votes[c.id] != null).length;
+  const remaining = items.length - votedInDeck;
+  const progress = items.length > 0 ? (votedInDeck / items.length) * 100 : 0;
+  const safeIndex = items.length > 0 ? Math.min(index, items.length - 1) : 0;
+  const current = items[safeIndex] ?? null;
+  const currentVote = current ? (votes[current.id] ?? null) : null;
+  const handleVote = useCallback(
+    (value: number) => {
+      if (!current) return;
+
+      const captionId = current.id;
+      setVoteError("");
+      setBounceKey((k) => k + 1);
+
+      startTransition(async () => {
+        const result = await submitVote(captionId, value);
+        if (result.error) {
+          setVoteError(result.error);
+          setSwipeDir(null);
+          return;
+        }
+
+        setVoteError("");
+        setVotes((old) => ({ ...old, [captionId]: result.vote }));
+        setVoteOrder((old) => {
+          const filtered = old.filter((id) => id !== captionId);
+          return result.vote !== null ? [captionId, ...filtered] : filtered;
+        });
+
+        if (result.vote === null) {
+          setSwipeDir(null);
+          return;
+        }
+
+        setSwipeDir(result.vote === 1 ? "right" : "left");
+
+        const stat = voteStats[captionId];
+        let hasReaction = false;
+
+        if (!stat || stat.total === 0) {
+          const msg = pickRandom(FIRST_MESSAGES);
+          setReaction({ key: Date.now(), kind: "first", ...msg });
+          hasReaction = true;
+        } else if (stat.total >= 3) {
+          const agreement = (result.vote === 1 ? stat.up : stat.down) / stat.total;
+          if (agreement >= 0.65) {
+            const msg = pickRandom(MAINSTREAM_MESSAGES);
+            setReaction({ key: Date.now(), kind: "mainstream", ...msg });
+            hasReaction = true;
+          } else if (agreement <= 0.25) {
+            const msg = pickRandom(UNIQUE_MESSAGES);
+            setReaction({ key: Date.now(), kind: "unique", ...msg });
+            hasReaction = true;
+          }
+        }
+
+        const delay = hasReaction ? 1400 : 600;
+        setTimeout(() => {
+          setReaction(null);
+          advance();
+        }, delay);
+      });
+    },
+    [advance, current, startTransition, voteStats]
+  );
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -83,28 +176,24 @@ export default function VoteCarousel({
 
       if (e.key === "ArrowLeft") {
         e.preventDefault();
-        handleVoteRef.current?.(-1);
+        handleVote(-1);
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
-        handleVoteRef.current?.(1);
+        handleVote(1);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [items.length]);
+  }, [handleVote, items.length]);
 
-  const handleVoteRef = useRef<((value: number) => void) | null>(null);
-
-  const itemMap = new Map(items.map((c) => [c.id, c]));
-  const votedEntries = voteOrder
-    .filter((id) => votes[id] != null && itemMap.has(id))
-    .map((id) => ({ ...itemMap.get(id)!, vote: votes[id]! }));
-  const upCount = votedEntries.filter((c) => c.vote === 1).length;
-  const downCount = votedEntries.filter((c) => c.vote === -1).length;
-  const totalVoted = votedEntries.length;
-  const remaining = items.length - totalVoted;
-  const progress = items.length > 0 ? (totalVoted / items.length) * 100 : 0;
+  if (!mounted) {
+    return (
+      <div className="py-20 text-center">
+        <p className="font-mono text-sm text-zinc-400">Loading...</p>
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (
@@ -114,69 +203,26 @@ export default function VoteCarousel({
     );
   }
 
+  if (!current) {
+    return (
+      <div className="py-20 text-center">
+        <p className="font-mono text-sm text-zinc-400">No captions to rate yet.</p>
+      </div>
+    );
+  }
+
   const allDone = remaining === 0 && totalVoted > 0;
-  const current = items[index];
-  const currentVote = votes[current.id] ?? null;
   const isUp = currentVote === 1;
   const isDown = currentVote === -1;
 
-  const handleVote = (value: number) => {
-    const next = currentVote === value ? null : value;
-
-    setBounceKey((k) => k + 1);
-    if (next !== null) {
-      setSwipeDir(value === 1 ? "right" : "left");
-    }
-
-    const captionId = current.id;
-    startTransition(async () => {
-      const result = await submitVote(captionId, value);
-      if (result) {
-        setVotes((old) => ({ ...old, [captionId]: result.vote }));
-        setVoteOrder((old) => {
-          const filtered = old.filter((id) => id !== captionId);
-          return result.vote !== null ? [captionId, ...filtered] : filtered;
-        });
-      }
-    });
-
-    if (next === null) return;
-
-    const stat = voteStats[current.id];
-    let hasReaction = false;
-
-    if (!stat || stat.total === 0) {
-      const msg = pickRandom(FIRST_MESSAGES);
-      setReaction({ key: Date.now(), kind: "first", ...msg });
-      hasReaction = true;
-    } else if (stat.total >= 3) {
-      const agreement = (value === 1 ? stat.up : stat.down) / stat.total;
-      if (agreement >= 0.65) {
-        const msg = pickRandom(MAINSTREAM_MESSAGES);
-        setReaction({ key: Date.now(), kind: "mainstream", ...msg });
-        hasReaction = true;
-      } else if (agreement <= 0.25) {
-        const msg = pickRandom(UNIQUE_MESSAGES);
-        setReaction({ key: Date.now(), kind: "unique", ...msg });
-        hasReaction = true;
-      }
-    }
-
-    const delay = hasReaction ? 1400 : 600;
-    setTimeout(() => {
-      setReaction(null);
-      advance();
-    }, delay);
-  };
-
-  handleVoteRef.current = handleVote;
-
   const goPrev = () => {
+    setVoteError("");
     setIndex((i) => Math.max(0, i - 1));
     setCardKey((k) => k + 1);
     setSwipeDir(null);
   };
   const goNext = () => {
+    setVoteError("");
     setIndex((i) => Math.min(items.length - 1, i + 1));
     setCardKey((k) => k + 1);
     setSwipeDir(null);
@@ -257,6 +303,11 @@ export default function VoteCarousel({
         {/* Vote buttons */}
         {!allDone && (
           <div className="mx-auto mt-6 max-w-sm">
+            {voteError && (
+              <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
+                {voteError}
+              </div>
+            )}
             <div className="flex gap-3">
               <button
                 key={`down-${bounceKey}`}
@@ -357,48 +408,87 @@ export default function VoteCarousel({
             </div>
           </button>
 
-          {historyOpen && (
-            <div className="mt-3 space-y-2">
-              {votedEntries.length === 0 ? (
-                <p className="py-4 text-center font-mono text-xs text-zinc-400">
-                  No votes yet
-                </p>
-              ) : (
-                votedEntries.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="flex items-center gap-3 rounded-xl border border-zinc-100 bg-zinc-50/50 p-2.5"
-                  >
-                    <img
-                      src={entry.imageUrl}
-                      alt={entry.content}
-                      className="h-9 w-9 shrink-0 rounded-lg object-cover"
-                    />
-                    <p className="min-w-0 flex-1 truncate text-[13px] text-zinc-600">
-                      {entry.content}
-                    </p>
-                    <div
-                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
-                        entry.vote === 1
-                          ? "bg-amber-100 text-amber-600"
-                          : "bg-zinc-200 text-zinc-600"
-                      }`}
-                    >
-                      {entry.vote === 1 ? (
-                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
-                        </svg>
-                      ) : (
-                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                        </svg>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
+          {historyOpen && (() => {
+            const totalHistoryPages = Math.max(1, Math.ceil(votedEntries.length / HISTORY_PAGE_SIZE));
+            const safePage = Math.min(historyPage, totalHistoryPages);
+            const startIdx = (safePage - 1) * HISTORY_PAGE_SIZE;
+            const pageEntries = votedEntries.slice(startIdx, startIdx + HISTORY_PAGE_SIZE);
+
+            return (
+              <div className="mt-3 space-y-2">
+                {votedEntries.length === 0 ? (
+                  <p className="py-4 text-center font-mono text-xs text-zinc-400">
+                    No votes yet
+                  </p>
+                ) : (
+                  <>
+                    {pageEntries.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="flex items-center gap-3 rounded-xl border border-zinc-100 bg-zinc-50/50 p-2.5"
+                      >
+                        <img
+                          src={entry.imageUrl}
+                          alt={entry.content}
+                          className="h-9 w-9 shrink-0 rounded-lg object-cover"
+                        />
+                        <p className="min-w-0 flex-1 truncate text-[13px] text-zinc-600">
+                          {entry.content}
+                        </p>
+                        <div
+                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
+                            entry.vote === 1
+                              ? "bg-amber-100 text-amber-600"
+                              : "bg-zinc-200 text-zinc-600"
+                          }`}
+                        >
+                          {entry.vote === 1 ? (
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+                            </svg>
+                          ) : (
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                            </svg>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+
+                    {totalHistoryPages > 1 && (
+                      <div className="flex items-center justify-center gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                          disabled={safePage <= 1}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-200 text-zinc-500 transition-all hover:border-zinc-400 hover:text-zinc-900 disabled:pointer-events-none disabled:opacity-30"
+                          aria-label="Previous page"
+                        >
+                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                          </svg>
+                        </button>
+                        <span className="font-mono text-xs text-zinc-400">
+                          {safePage} / {totalHistoryPages}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setHistoryPage((p) => Math.min(totalHistoryPages, p + 1))}
+                          disabled={safePage >= totalHistoryPages}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-200 text-zinc-500 transition-all hover:border-zinc-400 hover:text-zinc-900 disabled:pointer-events-none disabled:opacity-30"
+                          aria-label="Next page"
+                        >
+                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
 

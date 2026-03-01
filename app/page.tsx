@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { unstable_noStore as noStore } from "next/cache";
-import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import ClickableImage from "@/app/clickable-image";
 import NavHeader from "@/app/nav-header";
@@ -33,10 +32,6 @@ export default async function Home({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
 
   const sp = (await searchParams) ?? {};
   const pageParam = sp.page;
@@ -81,7 +76,7 @@ export default async function Home({
 
   return (
     <div className="min-h-screen">
-      <NavHeader email={user.email ?? "Unknown"} active="gallery" />
+      <NavHeader email={user?.email ?? null} active="gallery" />
 
       <main key={page} className="mx-auto w-full max-w-6xl px-6 pb-20 pt-12">
         {page === 1 && (
@@ -204,7 +199,7 @@ export default async function Home({
 
         <footer className="mt-16 border-t border-zinc-200/60 pt-8 text-center">
           <p className="font-mono text-[11px] text-zinc-400">
-            built for giggles, not for profit
+            built for giggles
           </p>
         </footer>
       </main>

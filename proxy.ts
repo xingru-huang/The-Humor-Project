@@ -2,15 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase-middleware";
 
 export async function proxy(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const isProtectedPath =
+    pathname === "/vote" ||
+    pathname.startsWith("/vote/") ||
+    pathname === "/upload" ||
+    pathname.startsWith("/upload/");
+
   try {
     const { supabase, response } = updateSession(request);
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    const pathname = request.nextUrl.pathname;
-
-    if (!user && pathname !== "/login" && !pathname.startsWith("/auth")) {
+    if (!user && isProtectedPath) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
 
@@ -20,7 +25,10 @@ export async function proxy(request: NextRequest) {
 
     return response;
   } catch {
-    return NextResponse.redirect(new URL("/login", request.url));
+    if (isProtectedPath) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+    return NextResponse.next();
   }
 }
 
