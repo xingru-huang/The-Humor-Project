@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 const API_BASE = "https://api.almostcrackd.ai";
@@ -23,19 +24,27 @@ type Caption = {
 type UploadFormProps = {
   supabaseUrl: string;
   supabaseAnonKey: string;
+  initialImageUrl: string | null;
+  initialCaptions: { id: string; content: string }[];
 };
 
 export default function UploadForm({
   supabaseUrl,
   supabaseAnonKey,
+  initialImageUrl,
+  initialCaptions,
 }: UploadFormProps) {
+  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(initialImageUrl);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
-  const [captions, setCaptions] = useState<Caption[]>([]);
+  const [captions, setCaptions] = useState<Caption[]>(initialCaptions);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Whether we're showing a persisted result (from DB) vs a just-selected local file
+  const isPersistedImage = !file && !!preview;
 
   async function getAccessToken(): Promise<string> {
     const supabase = createSupabaseBrowserClient(supabaseUrl, supabaseAnonKey);
@@ -143,7 +152,12 @@ export default function UploadForm({
       const captionData = await step4Res.json();
       const captionList = Array.isArray(captionData) ? captionData : captionData.captions ?? [];
       setCaptions(captionList);
+      setPreview(cdnUrl);
+      setFile(null);
       setStatus("");
+
+      // Refresh server component data so next navigation loads from DB
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setStatus("");
@@ -157,7 +171,7 @@ export default function UploadForm({
       {/* File input area */}
       <div
         className="relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-zinc-200 bg-zinc-50/50 p-8 transition-colors hover:border-zinc-300"
-        onClick={() => !file && fileInputRef.current?.click()}
+        onClick={() => !file && !isPersistedImage && fileInputRef.current?.click()}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {
@@ -180,7 +194,7 @@ export default function UploadForm({
               className="mx-auto max-h-80 rounded-lg object-contain"
             />
             <div className="mt-4 flex items-center justify-center gap-3">
-              <span className="text-sm text-zinc-500">{file?.name}</span>
+              {file && <span className="text-sm text-zinc-500">{file.name}</span>}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -217,14 +231,16 @@ export default function UploadForm({
         )}
       </div>
 
-      {/* Upload button */}
-      <button
-        onClick={handleUpload}
-        disabled={!file || loading}
-        className="w-full rounded-xl bg-zinc-900 py-3 text-sm font-semibold text-white transition-all duration-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {loading ? status || "Processing..." : "Generate Captions"}
-      </button>
+      {/* Upload button - only show when a new file is selected */}
+      {!isPersistedImage && (
+        <button
+          onClick={handleUpload}
+          disabled={!file || loading}
+          className="w-full rounded-xl bg-zinc-900 py-3 text-sm font-semibold text-white transition-all duration-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {loading ? status || "Processing..." : "Generate Captions"}
+        </button>
+      )}
 
       {/* Error message */}
       {error && (

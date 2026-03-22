@@ -34,6 +34,42 @@ export default async function UploadPage() {
 
   const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig();
 
+  // Fetch user's most recent caption to find their latest uploaded image
+  const { data: latestCaption } = await supabase
+    .from("captions")
+    .select(
+      "image_id, image:images!captions_image_id_fkey(url)"
+    )
+    .eq("profile_id", user.id)
+    .not("image_id", "is", null)
+    .order("created_datetime_utc", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let initialImageUrl: string | null = null;
+  let initialCaptions: { id: string; content: string }[] = [];
+
+  if (latestCaption?.image_id) {
+    const image = Array.isArray(latestCaption.image)
+      ? latestCaption.image[0]
+      : latestCaption.image ?? null;
+    initialImageUrl = image?.url ?? null;
+
+    if (initialImageUrl) {
+      // Fetch all captions for this image by this user
+      const { data: captionRows } = await supabase
+        .from("captions")
+        .select("id, content")
+        .eq("image_id", latestCaption.image_id)
+        .eq("profile_id", user.id);
+
+      initialCaptions = (captionRows ?? []).map((c) => ({
+        id: c.id,
+        content: c.content ?? "",
+      }));
+    }
+  }
+
   return (
     <div className="min-h-screen">
       <NavHeader email={user.email ?? "Unknown"} active="upload" />
@@ -54,6 +90,8 @@ export default async function UploadPage() {
         <UploadForm
           supabaseUrl={supabaseUrl}
           supabaseAnonKey={supabaseAnonKey}
+          initialImageUrl={initialImageUrl}
+          initialCaptions={initialCaptions}
         />
       </main>
     </div>
