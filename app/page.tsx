@@ -163,7 +163,6 @@ export default async function Home({
           <nav className="mt-14 flex items-center justify-center gap-2">
             <Link
               prefetch={false}
-              scroll={false}
               href={`/?page=${prevPage}`}
               className={`flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-sm text-zinc-500 transition-all hover:border-zinc-400 hover:text-zinc-900 ${
                 page <= 1 ? "pointer-events-none opacity-30" : ""
@@ -183,7 +182,6 @@ export default async function Home({
 
             <Link
               prefetch={false}
-              scroll={false}
               href={`/?page=${nextPage}`}
               className={`flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-sm text-zinc-500 transition-all hover:border-zinc-400 hover:text-zinc-900 ${
                 page >= totalPages ? "pointer-events-none opacity-30" : ""
