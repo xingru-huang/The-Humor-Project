@@ -8,8 +8,15 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   noStore();
+
+  const sp = (await searchParams) ?? {};
+  const errorParam = Array.isArray(sp.error) ? sp.error[0] : sp.error;
 
   let supabase;
   let config;
@@ -81,10 +88,17 @@ export default async function LoginPage() {
                 </form>
               </div>
             ) : (
-              <GoogleSignInButton
-                supabaseUrl={config.supabaseUrl}
-                supabaseAnonKey={config.supabaseAnonKey}
-              />
+              <div className="flex flex-col items-center gap-5">
+                {errorParam === "auth_failed" ? (
+                  <div className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    Authentication failed. Please try again.
+                  </div>
+                ) : null}
+                <GoogleSignInButton
+                  supabaseUrl={config.supabaseUrl}
+                  supabaseAnonKey={config.supabaseAnonKey}
+                />
+              </div>
             )}
           </div>
         </div>
