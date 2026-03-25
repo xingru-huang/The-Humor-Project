@@ -1,5 +1,6 @@
 import { unstable_noStore as noStore } from "next/cache";
 import { redirect } from "next/navigation";
+import { ensureProfileForUser, getUserNameParts } from "@/lib/ensure-profile";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseConfig } from "@/lib/supabase-config";
 import NavHeader from "@/app/nav-header";
@@ -32,6 +33,17 @@ export default async function UploadPage() {
     redirect("/login");
   }
 
+  const { error: profileError } = await ensureProfileForUser(supabase, user);
+
+  if (profileError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-sm text-zinc-500">{profileError}</p>
+      </div>
+    );
+  }
+
+  const firstName = getUserNameParts(user).first_name;
   const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig();
 
   // Fetch user's most recent caption to find their latest uploaded image
@@ -72,7 +84,11 @@ export default async function UploadPage() {
 
   return (
     <div className="min-h-screen">
-      <NavHeader email={user.email ?? "Unknown"} active="upload" />
+      <NavHeader
+        email={user.email ?? "Unknown"}
+        firstName={firstName}
+        active="upload"
+      />
 
       <main className="mx-auto w-full max-w-2xl px-6 pb-20 pt-12">
         <div className="animate-fade-up mb-10 text-center">

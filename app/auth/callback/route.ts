@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { ensureProfileForUser } from "@/lib/ensure-profile";
 import { getSupabaseConfig } from "@/lib/supabase-config";
 
 export async function GET(request: Request) {
@@ -32,6 +33,24 @@ export async function GET(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (error) {
+      return NextResponse.redirect(loginUrl);
+    }
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      await supabase.auth.signOut();
+      return NextResponse.redirect(loginUrl);
+    }
+
+    const { error: profileError } = await ensureProfileForUser(supabase, user);
+
+    if (profileError) {
+      await supabase.auth.signOut();
+      loginUrl.searchParams.set("error", "profile_sync_failed");
       return NextResponse.redirect(loginUrl);
     }
 

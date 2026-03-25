@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { unstable_noStore as noStore } from "next/cache";
+import { getUserNameParts } from "@/lib/ensure-profile";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import ClickableImage from "@/app/clickable-image";
 import NavHeader from "@/app/nav-header";
@@ -32,6 +33,7 @@ export default async function Home({
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const firstName = user ? getUserNameParts(user).first_name : null;
 
   const sp = (await searchParams) ?? {};
   const pageParam = sp.page;
@@ -76,7 +78,11 @@ export default async function Home({
 
   return (
     <div className="min-h-screen">
-      <NavHeader email={user?.email ?? null} active="gallery" />
+      <NavHeader
+        email={user?.email ?? null}
+        firstName={firstName}
+        active="gallery"
+      />
 
       <main key={page} className="mx-auto w-full max-w-6xl px-6 pb-20 pt-12">
         {page === 1 && (

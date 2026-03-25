@@ -1,5 +1,6 @@
 import { unstable_noStore as noStore } from "next/cache";
 import { redirect } from "next/navigation";
+import { ensureProfileForUser, getUserNameParts } from "@/lib/ensure-profile";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import NavHeader from "@/app/nav-header";
 import VoteCarousel from "@/app/vote-carousel";
@@ -32,6 +33,17 @@ export default async function VotePage() {
     redirect("/login");
   }
 
+  const { error: profileError } = await ensureProfileForUser(supabase, user);
+
+  if (profileError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-sm text-zinc-500">{profileError}</p>
+      </div>
+    );
+  }
+
+  const firstName = getUserNameParts(user).first_name;
   const { data: captionRows } = await supabase
     .from("captions")
     .select(
@@ -86,7 +98,11 @@ export default async function VotePage() {
 
   return (
     <div className="min-h-screen">
-      <NavHeader email={user.email ?? "Unknown"} active="vote" />
+      <NavHeader
+        email={user.email ?? "Unknown"}
+        firstName={firstName}
+        active="vote"
+      />
 
       <main className="mx-auto w-full max-w-6xl px-6 pb-20 pt-10">
         <VoteCarousel

@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { ensureProfileForUser } from "@/lib/ensure-profile";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 export async function signOut() {
@@ -32,6 +33,12 @@ export async function submitVote(
 
     if (authError || !user) {
       return { vote: null, error: "Please sign in to vote." };
+    }
+
+    const { error: profileError } = await ensureProfileForUser(supabase, user);
+
+    if (profileError) {
+      return { vote: null, error: profileError };
     }
 
     // SELECT from caption_votes WHERE profile_id = user.id AND caption_id = captionId
