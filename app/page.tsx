@@ -2,8 +2,8 @@ import Link from "next/link";
 import { unstable_noStore as noStore } from "next/cache";
 import { getUserNameParts } from "@/lib/ensure-profile";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import ClickableImage from "@/app/clickable-image";
 import NavHeader from "@/app/nav-header";
+import GalleryGrid from "@/app/gallery-grid";
 
 const PAGE_SIZE = 12;
 
@@ -100,70 +100,29 @@ export default async function Home({
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {rows.map((row, index) => {
-            const src = row.image?.url ?? null;
-            const caption = row.content ?? "";
-            const likeCount = row.like_count ?? 0;
-            const alt = caption;
-
+        <GalleryGrid
+          cards={rows.map((row) => {
             const name = row.profile
               ? `${row.profile.first_name ?? ""} ${row.profile.last_name ?? ""}`.trim()
               : "";
-            const author = name || "Anonymous";
-
-            const created = row.created_datetime_utc
-              ? new Date(row.created_datetime_utc).toLocaleDateString("en-US", {
-                  year: "numeric",
-                  month: "short",
-                  day: "2-digit",
-                })
-              : null;
-
-            return (
-              <article
-                key={row.id}
-                className="animate-card-in group flex flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-zinc-900/[0.06]"
-                style={{ animationDelay: `${index * 60}ms` }}
-              >
-                {src ? (
-                  <ClickableImage src={src} alt={alt} />
-                ) : (
-                  <div className="flex aspect-4/3 items-center justify-center bg-zinc-50 font-mono text-xs text-zinc-400">
-                    no image
-                  </div>
-                )}
-
-                <div className="flex flex-1 flex-col p-5">
-                  <h3 className="text-[15px] font-semibold leading-snug text-zinc-900">
-                    {caption}
-                  </h3>
-
-                  <div className="mt-auto flex items-center justify-between pt-4">
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-zinc-100 text-[9px] font-bold text-zinc-500">
-                        {author[0].toUpperCase()}
-                      </div>
-                      <span className="text-xs text-zinc-500">{author}</span>
-                    </div>
-                    <span className="text-[11px] text-zinc-400">{created}</span>
-                  </div>
-
-                  <div className="mt-3 flex items-center gap-1.5 border-t border-zinc-100 pt-3">
-                    <svg
-                      className="h-3.5 w-3.5 text-zinc-400 transition-colors group-hover:text-rose-400"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" />
-                    </svg>
-                    <span className="font-mono text-xs text-zinc-500">{likeCount}</span>
-                  </div>
-                </div>
-              </article>
-            );
+            return {
+              id: row.id,
+              src: row.image?.url ?? null,
+              caption: row.content ?? "",
+              author: name || "Anonymous",
+              created: row.created_datetime_utc
+                ? new Date(row.created_datetime_utc).toLocaleDateString("en-US", {
+                    year: "numeric",
+                    month: "short",
+                    day: "2-digit",
+                  })
+                : null,
+              likeCount: row.like_count ?? 0,
+            };
           })}
-        </div>
+          page={page}
+          totalPages={totalPages}
+        />
 
         {totalPages > 1 && (
           <nav className="mt-14 flex items-center justify-center gap-2">

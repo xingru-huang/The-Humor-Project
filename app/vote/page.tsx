@@ -104,7 +104,7 @@ export default async function VotePage() {
         active="vote"
       />
 
-      <main className="mx-auto w-full max-w-6xl px-6 pb-20 pt-10">
+      <main className="mx-auto w-full max-w-6xl px-6 pb-12 pt-6">
         <VoteCarousel
           captions={captions}
           initialVotes={initialVotes}

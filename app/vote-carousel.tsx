@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useTransition, useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -79,13 +79,12 @@ export default function VoteCarousel({
   const [voteOrder, setVoteOrder] = useState<string[]>(initialVoteOrder);
   const [isPending, startTransition] = useTransition();
   const [reaction, setReaction] = useState<Reaction | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [cardKey, setCardKey] = useState(0);
   const [swipeDir, setSwipeDir] = useState<"left" | "right" | null>(null);
   const [bounceKey, setBounceKey] = useState(0);
   const [historyPage, setHistoryPage] = useState(1);
   const [voteError, setVoteError] = useState("");
-  const containerRef = useRef<HTMLDivElement>(null);
+  const isVotingRef = useRef(false);
   const HISTORY_PAGE_SIZE = 5;
 
   const advance = useCallback(() => {
@@ -111,9 +110,10 @@ export default function VoteCarousel({
   const currentVote = current ? (votes[current.id] ?? null) : null;
   const handleVote = useCallback(
     (value: number) => {
-      if (!current) return;
+      if (!current || isVotingRef.current) return;
 
       const captionId = current.id;
+      isVotingRef.current = true;
       setVoteError("");
       setBounceKey((k) => k + 1);
 
@@ -122,6 +122,7 @@ export default function VoteCarousel({
         if (result.error) {
           setVoteError(result.error);
           setSwipeDir(null);
+          isVotingRef.current = false;
           return;
         }
 
@@ -134,6 +135,7 @@ export default function VoteCarousel({
 
         if (result.vote === null) {
           setSwipeDir(null);
+          isVotingRef.current = false;
           return;
         }
 
@@ -163,6 +165,7 @@ export default function VoteCarousel({
         setTimeout(() => {
           setReaction(null);
           advance();
+          isVotingRef.current = false;
         }, delay);
       });
     },
@@ -195,15 +198,7 @@ export default function VoteCarousel({
     );
   }
 
-  if (items.length === 0) {
-    return (
-      <div className="py-20 text-center">
-        <p className="font-mono text-sm text-zinc-400">No captions to rate yet.</p>
-      </div>
-    );
-  }
-
-  if (!current) {
+  if (items.length === 0 || !current) {
     return (
       <div className="py-20 text-center">
         <p className="font-mono text-sm text-zinc-400">No captions to rate yet.</p>
@@ -215,280 +210,247 @@ export default function VoteCarousel({
   const isUp = currentVote === 1;
   const isDown = currentVote === -1;
 
-  const goPrev = () => {
+  const goBack = () => {
+    if (index <= 0) return;
     setVoteError("");
-    setIndex((i) => Math.max(0, i - 1));
+    setIndex((i) => i - 1);
     setCardKey((k) => k + 1);
     setSwipeDir(null);
   };
-  const goNext = () => {
-    setVoteError("");
-    setIndex((i) => Math.min(items.length - 1, i + 1));
-    setCardKey((k) => k + 1);
-    setSwipeDir(null);
-  };
+
+  // History pagination
+  const totalHistoryPages = Math.max(1, Math.ceil(votedEntries.length / HISTORY_PAGE_SIZE));
+  const safePage = Math.min(historyPage, totalHistoryPages);
+  const startIdx = (safePage - 1) * HISTORY_PAGE_SIZE;
+  const pageEntries = votedEntries.slice(startIdx, startIdx + HISTORY_PAGE_SIZE);
 
   return (
     <>
-      <div ref={containerRef} className="mx-auto w-full max-w-3xl">
-        {/* Progress bar */}
-        <div className="mb-8">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="font-display text-2xl tracking-tight text-zinc-900 sm:text-3xl">
-              Rate the laughs
-            </h2>
-            <span className="font-mono text-xs text-zinc-400">
-              {totalVoted}/{items.length}
-            </span>
-          </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200/60">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-400 transition-all duration-500 ease-out"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          <p className="mt-2 text-[13px] text-zinc-500">
-            Tap to vote &middot; Click again to undo &middot; Use <kbd className="rounded border border-zinc-300 bg-zinc-100 px-1 py-0.5 font-mono text-[11px]">&larr;</kbd> <kbd className="rounded border border-zinc-300 bg-zinc-100 px-1 py-0.5 font-mono text-[11px]">&rarr;</kbd> keys
-          </p>
+      {/* Header: title + progress */}
+      <div className="mx-auto mb-4 w-full max-w-5xl">
+        <div className="mb-1.5 flex items-center justify-between">
+          <h2 className="font-display text-xl tracking-tight text-zinc-900 sm:text-2xl">
+            Rate the laughs
+          </h2>
+          <span className="font-mono text-xs text-zinc-400">
+            {totalVoted}/{items.length}
+          </span>
+        </div>
+        <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-200/60">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-400 transition-all duration-500 ease-out"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        <p className="mt-1.5 text-[12px] text-zinc-600">
+          Vote with the buttons below, or press <kbd className="rounded border border-zinc-300 bg-zinc-100 px-1 py-0.5 font-mono text-[10px]">&larr;</kbd> Meh <kbd className="rounded border border-zinc-300 bg-zinc-100 px-1 py-0.5 font-mono text-[10px]">&rarr;</kbd> LOL &middot; Click redo to go back
+        </p>
+      </div>
+
+      {/* Card + History side by side */}
+      <div className="mx-auto flex w-full max-w-6xl items-start justify-center gap-6">
+        {/* Left: Card + Buttons */}
+        <div className="w-full max-w-3xl">
+          {allDone ? (
+            <div className="animate-fade-up rounded-2xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
+              <div className="mb-3 text-4xl">&#127881;</div>
+              <h3 className="font-display text-xl tracking-tight text-zinc-900">
+                All rated!
+              </h3>
+              <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-zinc-500">
+                You voted on all {items.length} captions.
+                Your humor profile: {upCount} liked, {downCount} disliked.
+              </p>
+              <div className="mx-auto mt-4 flex max-w-xs gap-3">
+                <div className="flex-1 rounded-xl bg-amber-50 py-2.5">
+                  <p className="font-mono text-xl font-bold text-amber-600">{upCount}</p>
+                  <p className="mt-0.5 text-[11px] font-medium text-amber-600/60">LOL</p>
+                </div>
+                <div className="flex-1 rounded-xl bg-zinc-100 py-2.5">
+                  <p className="font-mono text-xl font-bold text-zinc-600">{downCount}</p>
+                  <p className="mt-0.5 text-[11px] font-medium text-zinc-400">Meh</p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Card */}
+              <div
+                key={cardKey}
+                className={`overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm ${
+                  swipeDir === "left"
+                    ? "animate-swipe-left"
+                    : swipeDir === "right"
+                      ? "animate-swipe-right"
+                      : "animate-card-swap"
+                }`}
+              >
+                <div className="aspect-[16/9] w-full bg-zinc-100">
+                  <img
+                    src={current.imageUrl}
+                    alt={current.content}
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+                <div className="px-5 py-3">
+                  <h3 className="text-base font-semibold leading-relaxed text-zinc-900">
+                    {current.content}
+                  </h3>
+                </div>
+              </div>
+
+              {/* Vote buttons + redo */}
+              <div className="mt-3">
+                {voteError && (
+                  <div className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
+                    {voteError}
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    key={`down-${bounceKey}`}
+                    type="button"
+                    onClick={() => handleVote(-1)}
+                    disabled={isPending}
+                    className={`flex h-12 flex-1 items-center justify-center gap-1.5 rounded-full transition-all duration-200 disabled:opacity-40 ${
+                      isDown
+                        ? "animate-vote-bounce bg-zinc-800 text-white shadow-lg shadow-zinc-900/20"
+                        : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 active:scale-95"
+                    }`}
+                    aria-label="Downvote"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3H10z" />
+                      <path d="M17 2h2.67A2.31 2.31 0 0122 4v7a2.31 2.31 0 01-2.33 2H17" />
+                    </svg>
+                    <span className="text-[11px] font-semibold uppercase tracking-wider opacity-60">Meh</span>
+                  </button>
+
+                  <button
+                    key={`up-${bounceKey}`}
+                    type="button"
+                    onClick={() => handleVote(1)}
+                    disabled={isPending}
+                    className={`flex h-12 flex-1 items-center justify-center gap-1.5 rounded-full transition-all duration-200 disabled:opacity-40 ${
+                      isUp
+                        ? "animate-vote-bounce bg-amber-400 text-zinc-900 shadow-lg shadow-amber-400/30"
+                        : "bg-amber-50 text-amber-700 hover:bg-amber-100 active:scale-95"
+                    }`}
+                    aria-label="Upvote"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z" />
+                      <path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3" />
+                    </svg>
+                    <span className="text-[11px] font-semibold uppercase tracking-wider opacity-60">LOL</span>
+                  </button>
+
+                  {/* Redo button */}
+                  <button
+                    type="button"
+                    onClick={goBack}
+                    disabled={index === 0}
+                    className="flex h-12 shrink-0 items-center gap-1.5 rounded-full border border-zinc-300 bg-white px-4 text-zinc-500 shadow-sm transition-all hover:border-zinc-400 hover:bg-zinc-50 hover:text-zinc-700 disabled:opacity-30"
+                    aria-label="Go back"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+                    </svg>
+                    <span className="text-[11px] font-medium">Redo</span>
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
-        {/* Card */}
-        {allDone ? (
-          <div className="animate-fade-up rounded-2xl border border-zinc-200 bg-white p-12 text-center shadow-sm">
-            <div className="mb-4 text-5xl">&#127881;</div>
-            <h3 className="font-display text-2xl tracking-tight text-zinc-900">
-              All rated!
-            </h3>
-            <p className="mx-auto mt-3 max-w-xs text-sm leading-relaxed text-zinc-500">
-              You voted on all {items.length} captions.
-              Your humor profile: {upCount} liked, {downCount} disliked.
-            </p>
-            <div className="mx-auto mt-6 flex max-w-xs gap-3">
-              <div className="flex-1 rounded-xl bg-amber-50 py-3">
-                <p className="font-mono text-2xl font-bold text-amber-600">{upCount}</p>
-                <p className="mt-0.5 text-[11px] font-medium text-amber-600/60">LOL</p>
-              </div>
-              <div className="flex-1 rounded-xl bg-zinc-100 py-3">
-                <p className="font-mono text-2xl font-bold text-zinc-600">{downCount}</p>
-                <p className="mt-0.5 text-[11px] font-medium text-zinc-400">Meh</p>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div
-            key={cardKey}
-            className={`overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm ${
-              swipeDir === "left"
-                ? "animate-swipe-left"
-                : swipeDir === "right"
-                  ? "animate-swipe-right"
-                  : "animate-card-swap"
-            }`}
-          >
-            <div className="aspect-video w-full bg-zinc-100">
-              <img
-                src={current.imageUrl}
-                alt={current.content}
-                className="h-full w-full object-contain"
-              />
-            </div>
-            <div className="px-8 py-6">
-              <h3 className="text-lg font-semibold leading-relaxed text-zinc-900 sm:text-xl">
-                {current.content}
-              </h3>
-            </div>
-          </div>
-        )}
-
-        {/* Vote buttons */}
-        {!allDone && (
-          <div className="mx-auto mt-6 max-w-sm">
-            {voteError && (
-              <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
-                {voteError}
-              </div>
-            )}
-            <div className="flex gap-3">
-              <button
-                key={`down-${bounceKey}`}
-                type="button"
-                onClick={() => handleVote(-1)}
-                disabled={isPending}
-                className={`flex h-16 flex-1 flex-col items-center justify-center gap-0.5 rounded-full transition-all duration-200 disabled:opacity-40 ${
-                  isDown
-                    ? "animate-vote-bounce bg-zinc-800 text-white shadow-lg shadow-zinc-900/20"
-                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 active:scale-95"
-                }`}
-                aria-label="Downvote"
-              >
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3H10z" />
-                  <path d="M17 2h2.67A2.31 2.31 0 0122 4v7a2.31 2.31 0 01-2.33 2H17" />
-                </svg>
-                <span className="text-[10px] font-semibold uppercase tracking-wider opacity-60">Meh</span>
-              </button>
-
-              <button
-                key={`up-${bounceKey}`}
-                type="button"
-                onClick={() => handleVote(1)}
-                disabled={isPending}
-                className={`flex h-16 flex-1 flex-col items-center justify-center gap-0.5 rounded-full transition-all duration-200 disabled:opacity-40 ${
-                  isUp
-                    ? "animate-vote-bounce bg-amber-400 text-zinc-900 shadow-lg shadow-amber-400/30"
-                    : "bg-amber-50 text-amber-700 hover:bg-amber-100 active:scale-95"
-                }`}
-                aria-label="Upvote"
-              >
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z" />
-                  <path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3" />
-                </svg>
-                <span className="text-[10px] font-semibold uppercase tracking-wider opacity-60">LOL</span>
-              </button>
-            </div>
-
-            <div className="mt-4 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={goPrev}
-                disabled={index === 0}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-30"
-                aria-label="Previous"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-
-              <span className="font-mono text-xs uppercase tracking-widest text-zinc-400">
-                {remaining} remaining
+        {/* Right: History panel */}
+        <div className="hidden w-72 shrink-0 lg:block">
+          <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-sm font-medium text-zinc-700">
+                Your votes
+                <span className="ml-1 font-mono text-xs text-zinc-400">
+                  ({votedEntries.length})
+                </span>
               </span>
-
-              <button
-                type="button"
-                onClick={goNext}
-                disabled={index === items.length - 1}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-30"
-                aria-label="Next"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[10px] text-emerald-500">{upCount} up</span>
+                <span className="font-mono text-[10px] text-rose-400">{downCount} dn</span>
+              </div>
             </div>
-          </div>
-        )}
 
-        {/* Vote history */}
-        <div className="mx-auto mt-8 max-w-sm border-t border-zinc-100 pt-5">
-          <button
-            type="button"
-            onClick={() => setHistoryOpen((o) => !o)}
-            className="flex w-full items-center justify-between text-sm"
-          >
-            <span className="font-medium text-zinc-700">
-              Your votes
-              <span className="ml-1.5 font-mono text-xs text-zinc-400">
-                ({votedEntries.length})
-              </span>
-            </span>
-            <div className="flex items-center gap-3">
-              <span className="font-mono text-[11px] text-emerald-500">{upCount} up</span>
-              <span className="font-mono text-[11px] text-rose-400">{downCount} down</span>
-              <svg
-                className={`h-4 w-4 text-zinc-400 transition-transform duration-200 ${historyOpen ? "rotate-180" : ""}`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-              </svg>
-            </div>
-          </button>
+            {votedEntries.length === 0 ? (
+              <p className="py-6 text-center font-mono text-xs text-zinc-400">
+                No votes yet
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {pageEntries.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="flex items-center gap-2 rounded-lg border border-zinc-100 bg-zinc-50/50 p-2"
+                  >
+                    <img
+                      src={entry.imageUrl}
+                      alt={entry.content}
+                      className="h-8 w-8 shrink-0 rounded-md object-cover"
+                    />
+                    <p className="min-w-0 flex-1 truncate text-[12px] text-zinc-600">
+                      {entry.content}
+                    </p>
+                    <div
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+                        entry.vote === 1
+                          ? "bg-amber-100 text-amber-600"
+                          : "bg-zinc-200 text-zinc-600"
+                      }`}
+                    >
+                      {entry.vote === 1 ? (
+                        <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+                        </svg>
+                      ) : (
+                        <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                        </svg>
+                      )}
+                    </div>
+                  </div>
+                ))}
 
-          {historyOpen && (() => {
-            const totalHistoryPages = Math.max(1, Math.ceil(votedEntries.length / HISTORY_PAGE_SIZE));
-            const safePage = Math.min(historyPage, totalHistoryPages);
-            const startIdx = (safePage - 1) * HISTORY_PAGE_SIZE;
-            const pageEntries = votedEntries.slice(startIdx, startIdx + HISTORY_PAGE_SIZE);
-
-            return (
-              <div className="mt-3 space-y-2">
-                {votedEntries.length === 0 ? (
-                  <p className="py-4 text-center font-mono text-xs text-zinc-400">
-                    No votes yet
-                  </p>
-                ) : (
-                  <>
-                    {pageEntries.map((entry) => (
-                      <div
-                        key={entry.id}
-                        className="flex items-center gap-3 rounded-xl border border-zinc-100 bg-zinc-50/50 p-2.5"
-                      >
-                        <img
-                          src={entry.imageUrl}
-                          alt={entry.content}
-                          className="h-9 w-9 shrink-0 rounded-lg object-cover"
-                        />
-                        <p className="min-w-0 flex-1 truncate text-[13px] text-zinc-600">
-                          {entry.content}
-                        </p>
-                        <div
-                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
-                            entry.vote === 1
-                              ? "bg-amber-100 text-amber-600"
-                              : "bg-zinc-200 text-zinc-600"
-                          }`}
-                        >
-                          {entry.vote === 1 ? (
-                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
-                            </svg>
-                          ) : (
-                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                            </svg>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-
-                    {totalHistoryPages > 1 && (
-                      <div className="flex items-center justify-center gap-2 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
-                          disabled={safePage <= 1}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-200 text-zinc-500 transition-all hover:border-zinc-400 hover:text-zinc-900 disabled:pointer-events-none disabled:opacity-30"
-                          aria-label="Previous page"
-                        >
-                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                          </svg>
-                        </button>
-                        <span className="font-mono text-xs text-zinc-400">
-                          {safePage} / {totalHistoryPages}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setHistoryPage((p) => Math.min(totalHistoryPages, p + 1))}
-                          disabled={safePage >= totalHistoryPages}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-200 text-zinc-500 transition-all hover:border-zinc-400 hover:text-zinc-900 disabled:pointer-events-none disabled:opacity-30"
-                          aria-label="Next page"
-                        >
-                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
-                      </div>
-                    )}
-                  </>
+                {totalHistoryPages > 1 && (
+                  <div className="flex items-center justify-center gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                      disabled={safePage <= 1}
+                      className="flex h-6 w-6 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition-all hover:border-zinc-400 hover:text-zinc-900 disabled:pointer-events-none disabled:opacity-30"
+                      aria-label="Previous page"
+                    >
+                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    <span className="font-mono text-[10px] text-zinc-400">
+                      {safePage}/{totalHistoryPages}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setHistoryPage((p) => Math.min(totalHistoryPages, p + 1))}
+                      disabled={safePage >= totalHistoryPages}
+                      className="flex h-6 w-6 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition-all hover:border-zinc-400 hover:text-zinc-900 disabled:pointer-events-none disabled:opacity-30"
+                      aria-label="Next page"
+                    >
+                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </div>
                 )}
               </div>
-            );
-          })()}
+            )}
+          </div>
         </div>
       </div>
 
